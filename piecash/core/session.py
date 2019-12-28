@@ -67,7 +67,7 @@ version_supported = {
         'recurrences': 2,
         'schedxactions': 1,
         'slots': 4,
-        'splits': 4,
+        'splits': (4, 5),
         'taxtable_entries': 3,
         'taxtables': 2,
         'transactions': 4,
@@ -246,7 +246,7 @@ def create_book(sqlite_file=None,
                                                 "Choose one of {}".format(VERSION_FORMAT,
                                                                           list(version_supported.keys()))
     for table_name, table_version in version_supported[VERSION_FORMAT].items():
-        s.add(Version(table_name=table_name, table_version=table_version))
+        s.add(Version(table_name=table_name, table_version=table_version if isinstance(table_version, int) else max(table_version)))
 
     # create book and merge with session
 
@@ -341,13 +341,21 @@ def open_book(sqlite_file=None,
     version_book = {v.table_name: v.table_version
                     for v in s.query(Version).all()
                     if "Gnucash" not in v.table_name}
+
     for version, vt in version_supported.items():
-        if version_book == {k: v
-                            for k, v in vt.items() if
-                            "Gnucash" not in k}:
+        for table_name, table_version in vt.items():
+            try:
+                table_version_min, table_version_max = table_version
+            except TypeError:
+                table_version_min, table_version_max = table_version, table_version
+            if "Gnucash" not in table_name:
+                if not table_version_min <= version_book.get(table_name) <= table_version_max:
+                    break
+        else:
             break
     else:
         raise ValueError("Unsupported table versions")
+
     assert version == "3.0", "This version of piecash only support books from gnucash 3.0.x " \
                              "which is not the case for {}".format(uri_conn)
 
